@@ -2,6 +2,9 @@ name: Build unsigned Code App IPA
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build-unsigned-ipa.yml
 
 permissions:
   contents: read
@@ -44,6 +47,58 @@ jobs:
           if [ ! -f CodeApp/Constants/Secrets.swift ]; then
             printf '%s\n' 'let JUDGE0_ENDPOINT = ""' 'let JUDGE0_KEY = ""' > CodeApp/Constants/Secrets.swift
           fi
+
+      - name: Generate missing app icon for open-source builds
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import struct
+          import zlib
+          from pathlib import Path
+
+          size = 1024
+          output = Path("CodeApp/Assets.xcassets/Iconv2.appiconset")
+          output.mkdir(parents=True, exist_ok=True)
+
+          # The upstream repo references Iconv2, but does not distribute the
+          # icon asset. Create a simple placeholder for personal builds.
+          data = bytearray()
+          for y in range(size):
+              data.append(0)
+              for x in range(size):
+                  r, g, b = 27 + x // 36, 30 + y // 24, 65 + x // 32
+                  center = 512
+                  left = 345 - int(abs(y - center) * 0.36)
+                  right = 675 + int(abs(y - center) * 0.36)
+                  if 275 < y < 749 and (
+                      abs(x - left) < 16 or abs(x - right) < 16
+                  ):
+                      r, g, b = 238, 241, 255
+                  data.extend((min(r, 255), min(g, 255), min(b, 255)))
+
+          def chunk(tag, payload):
+              return (struct.pack(">I", len(payload)) + tag + payload +
+                      struct.pack(">I", zlib.crc32(tag + payload) & 0xffffffff))
+
+          png = b"\\x89PNG\\r\\n\\x1a\\n"
+          png += chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+          png += chunk(b"IDAT", zlib.compress(data, 6))
+          png += chunk(b"IEND", b"")
+          (output / "AppIcon.png").write_bytes(png)
+          (output / "Contents.json").write_text(json.dumps({
+              "images": [{
+                  "filename": "AppIcon.png",
+                  "idiom": "universal",
+                  "platform": "ios",
+                  "size": "1024x1024"
+              }],
+              "info": {"author": "xcode", "version": 1}
+          }, indent=2))
+          print("Generated icon asset:", output)
+          PY
 
       - name: Build iPhone app without Apple signing
         shell: bash
