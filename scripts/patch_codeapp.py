@@ -323,8 +323,8 @@ print("Added:", theme_path.relative_to(root))
 # the Local Network permission prompt if this network path requires it.
 edit("CodeApp/Info.plist",
     "\t<key>NSFaceIDUsageDescription</key>",
-    "\t<key>NSLocalNetworkUsageDescription</key>\\n"
-    "\t<string>Connect to your private SSH and SFTP servers, including Tailscale devices.</string>\\n"
+    "\t<key>NSLocalNetworkUsageDescription</key>\n"
+    "\t<string>Connect to your private SSH and SFTP servers, including Tailscale devices.</string>\n"
     "\t<key>NSFaceIDUsageDescription</key>")
 
 # Build-time accent-color fallback: purple for screens outside theme overrides.
