@@ -83,7 +83,7 @@ jobs:
               return (struct.pack(">I", len(payload)) + tag + payload +
                       struct.pack(">I", zlib.crc32(tag + payload) & 0xffffffff))
 
-          png = b"\\x89PNG\\r\\n\\x1a\\n"
+          png = bytes([137, 80, 78, 71, 13, 10, 26, 10])
           png += chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
           png += chunk(b"IDAT", zlib.compress(data, 6))
           png += chunk(b"IEND", b"")
