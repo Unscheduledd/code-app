@@ -319,6 +319,14 @@ base["tokenColors"] = recolor(base.get("tokenColors", []))
 theme_path.write_text(json.dumps(base, indent=2) + "\n")
 print("Added:", theme_path.relative_to(root))
 
+# Inform iOS why the app accesses private LAN/VPN peers; allow iOS to show
+# the Local Network permission prompt if this network path requires it.
+edit("CodeApp/Info.plist",
+    "\t<key>NSFaceIDUsageDescription</key>",
+    "\t<key>NSLocalNetworkUsageDescription</key>\\n"
+    "\t<string>Connect to your private SSH and SFTP servers, including Tailscale devices.</string>\\n"
+    "\t<key>NSFaceIDUsageDescription</key>")
+
 # Build-time accent-color fallback: purple for screens outside theme overrides.
 accent = root / "CodeApp/Assets.xcassets/AccentColor.colorset/Contents.json"
 accent.write_text(json.dumps({
