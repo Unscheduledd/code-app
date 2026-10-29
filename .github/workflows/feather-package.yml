@@ -1,0 +1,73 @@
+name: Package Code App for Feather
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/feather-package.yml
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download previous successful unsigned IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 40805162837 \
+            --repo Unscheduledd/code-app \
+            --name CodeApp-unsigned-IPA \
+            --dir input
+          test -s input/CodeApp-unsigned.ipa
+          unzip -tqq input/CodeApp-unsigned.ipa
+
+      - name: Inspect bundled Java libraries and create editor-focused IPA
+        run: |
+          set -euo pipefail
+          mkdir -p unpack
+          unzip -q input/CodeApp-unsigned.ipa -d unpack
+          app="unpack/Payload/Code.app"
+          test -f "$app/Info.plist"
+          test -d "$app/PlugIns/extension.appex"
+          echo "== Original app size =="
+          du -sh "$app"
+          echo "== Java runtime directories =="
+          find "$app" -type d -name java-8-openjdk -print
+          echo "== Java binaries (sample) =="
+          find "$app/PlugIns/extension.appex/java-8-openjdk" -type f -name '*.dylib' -print | head -n 20 || true
+          echo "== Symlink count =="
+          find "$app" -type l | wc -l
+
+          # These embedded Java 8 dynamic libraries are reported by Feather.
+          # Remove Java runtime data ONLY, keeping the full editor, SSH support,
+          # the app extension itself, Node, Git, and other frameworks intact.
+          java="$app/PlugIns/extension.appex/java-8-openjdk"
+          test -d "$java"
+          du -sh "$java"
+          rm -rf "$java"
+          test ! -e "$java"
+
+          echo "== Feather edition size =="
+          du -sh "$app"
+          (cd unpack && zip -qry -6 ../CodeApp-Feather-no-Java.ipa Payload)
+          unzip -tqq CodeApp-Feather-no-Java.ipa
+          if unzip -Z1 CodeApp-Feather-no-Java.ipa | grep -q '/java-8-openjdk/'; then
+            echo "Unexpected embedded Java files" >&2
+            exit 1
+          fi
+          test -s CodeApp-Feather-no-Java.ipa
+          ls -lh CodeApp-Feather-no-Java.ipa
+
+      - name: Upload Feather-compatible experiment
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeApp-Feather-no-Java
+          path: CodeApp-Feather-no-Java.ipa
+          if-no-files-found: error
+          retention-days: 7
