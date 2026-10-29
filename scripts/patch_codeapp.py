@@ -24,9 +24,9 @@ edit(ui,
     "    func connect() {\n",
     """    // Never display or log private-key material. Validate only the envelope.
     private func usePrivateKeyText(_ value: String) {
-        let normalized = value.replacingOccurrences(of: "\r\n", with: "\n")
+        let normalized = value.replacingOccurrences(of: "\\r\\n", with: "\\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstLine = normalized.components(separatedBy: "\n").first ?? ""
+        let firstLine = normalized.components(separatedBy: "\\n").first ?? ""
         guard firstLine.hasPrefix("-----BEGIN "),
               firstLine.hasSuffix("PRIVATE KEY-----"),
               normalized.contains("-----END "),
@@ -35,7 +35,7 @@ edit(ui,
             keyImportNotice = "This is not a PEM/OpenSSH private key. Select the file without .pub."
             return
         }
-        privateKeyContent = normalized + "\n"
+        privateKeyContent = normalized + "\\n"
         keyImportNotice = "Private key ready. Enter its passphrase below, if set."
     }
 
