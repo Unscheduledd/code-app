@@ -18,8 +18,8 @@ def edit(name, old, new):
     print("Patched:", name)
 
 ui = "CodeApp/Views/RemoteCreateSection.swift"
-edit(ui, "import SwiftUI\n", "import SwiftUI\nimport UniformTypeIdentifiers\n")
-edit(ui, "    @State var showFileImporter: Bool = false\n", "    @State var showFileImporter: Bool = false\n    @State private var keyImportNotice: String? = nil\n")
+edit(ui, "import SwiftUI\n", "import SwiftUI\nimport UniformTypeIdentifiers\nimport Network\n")
+edit(ui, "    @State var showFileImporter: Bool = false\n", "    @State var showFileImporter: Bool = false\n    @State private var keyImportNotice: String? = nil\n    @State private var sshPortCheck: String? = nil\n")
 edit(ui,
     "    func connect() {\n",
     """    // Never display or log private-key material. Validate only the envelope.
@@ -41,6 +41,70 @@ edit(ui,
 
     func connect() {
 """)
+
+# TCP-only probe: separates a Tailscale/router failure from an SSH handshake
+# failure without ever transmitting or examining the private key.
+edit(ui,
+    "    func connect() {\n",
+    """    private func testSSHPort() {
+        let host = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty, let p = UInt16(port), p > 0,
+              let endpointPort = NWEndpoint.Port(rawValue: p) else {
+            sshPortCheck = "Enter a valid SSH address and port first."
+            return
+        }
+        sshPortCheck = "Checking TCP connectivity..."
+        let connection = NWConnection(
+            host: NWEndpoint.Host(host),
+            port: endpointPort,
+            using: .tcp
+        )
+        let queue = DispatchQueue(label: "codeapp.remote.ssh-port-check")
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                DispatchQueue.main.async {
+                    sshPortCheck = "TCP port reachable. If SSH login still fails, check SSH handshake algorithms or key format."
+                }
+                connection.cancel()
+            case .failed(let error):
+                DispatchQueue.main.async {
+                    sshPortCheck = "TCP connection failed: \\(error.localizedDescription). Check Tailscale and firewall access."
+                }
+                connection.cancel()
+            default:
+                break
+            }
+        }
+        connection.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + 8) {
+            connection.cancel()
+            DispatchQueue.main.async {
+                if sshPortCheck == "Checking TCP connectivity..." {
+                    sshPortCheck = "TCP check timed out. Confirm Tailscale is connected, then retry."
+                }
+            }
+        }
+    }
+
+    func connect() {
+""")
+
+edit(ui,
+    """                Toggle("Use Key Authentication", isOn: $usesPrivateKey)
+""",
+    """                Button(action: { testSSHPort() }) {
+                    Label("Test SSH port", systemImage: "network")
+                }
+                if let result = sshPortCheck {
+                    Text(result)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Toggle("Use Key Authentication", isOn: $usesPrivateKey)
+""")
+
 edit(ui,
     "        guard !password.isEmpty || usesPrivateKey else {\n",
     """        if usesPrivateKey {
