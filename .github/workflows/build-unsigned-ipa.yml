@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - .github/workflows/build-unsigned-ipa.yml
+      - scripts/patch_codeapp.py
 
 permissions:
   contents: read
@@ -18,6 +19,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
+      - name: Checkout GTU Code App patches
+        uses: actions/checkout@v4
+
       - name: Get official Code App source
         shell: bash
         run: |
@@ -100,6 +104,15 @@ jobs:
           print("Generated icon asset:", output)
           PY
 
+      - name: Patch Code App SSH handling and purple theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/patch_codeapp.py
+          python3 scripts/patch_codeapp.py source
+          python3 -m json.tool source/Themes/gtu-midnight-purple-color-theme.json > /dev/null
+          echo 'Source patch and theme validated.'
+
       - name: Build iPhone app without Apple signing
         shell: bash
         working-directory: source
@@ -125,6 +138,14 @@ jobs:
           app="$RUNNER_TEMP/CodeDerivedData/Build/Products/Release-iphoneos/Code.app"
           test -d "$app"
           test -f "$app/Info.plist"
+          # Feather signs nested executable code; Java's bundled dylibs are
+          # unsupported by its signing pipeline. Preserve SSH/SFTP and Node.
+          java="$app/PlugIns/extension.appex/java-8-openjdk"
+          if [ -d "$java" ]; then
+            du -sh "$java"
+            rm -rf "$java"
+          fi
+          test ! -e "$java"
           mkdir -p package/Payload
           ditto "$app" package/Payload/Code.app
           cd package
@@ -132,11 +153,16 @@ jobs:
           cd ..
           test -s CodeApp-unsigned.ipa
           ls -lh CodeApp-unsigned.ipa
+          unzip -tqq CodeApp-unsigned.ipa
+          if unzip -Z1 CodeApp-unsigned.ipa | grep -q '/java-8-openjdk/'; then
+            echo 'Java runtime unexpectedly remained in Feather IPA' >&2
+            exit 1
+          fi
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: CodeApp-unsigned-IPA
+          name: CodeApp-GTU-Purple-Feather
           path: CodeApp-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
