@@ -2,9 +2,6 @@ name: Build unsigned Code App IPA
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/build-unsigned-ipa.yml
 
 permissions:
   contents: read
