@@ -1,0 +1,99 @@
+name: Build unsigned Code App IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build-unsigned-ipa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeapp-unsigned-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Get official Code App source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init source
+          git -C source remote add origin https://github.com/thebaselab/codeapp.git
+          git -C source fetch --depth=1 origin 9b8475e24546d63a2d5469a2f41c21ec21f7c873
+          git -C source checkout --detach FETCH_HEAD
+          echo "Building upstream commit $(git -C source rev-parse HEAD)"
+          xcodebuild -version
+
+      - name: Download required runtimes and frameworks
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          bash -e ./downloadFrameworks.sh
+          echo "Framework download size:"
+          du -sh Resources
+          df -h .
+
+      - name: Add empty optional remote execution configuration
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          if [ ! -f CodeApp/Constants/Secrets.swift ]; then
+            printf '%s\n' 'let JUDGE0_ENDPOINT = ""' 'let JUDGE0_KEY = ""' > CodeApp/Constants/Secrets.swift
+          fi
+
+      - name: Build iPhone app without Apple signing
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Code.xcodeproj \
+            -scheme "Code App" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/CodeDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee "$RUNNER_TEMP/codeapp-build.log"
+
+      - name: Package unsigned IPA for Feather
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/CodeDerivedData/Build/Products/Release-iphoneos/Code.app"
+          test -d "$app"
+          test -f "$app/Info.plist"
+          mkdir -p package/Payload
+          ditto "$app" package/Payload/Code.app
+          cd package
+          /usr/bin/zip -qr ../CodeApp-unsigned.ipa Payload
+          cd ..
+          test -s CodeApp-unsigned.ipa
+          ls -lh CodeApp-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeApp-unsigned-IPA
+          path: CodeApp-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeApp-build-log
+          path: ${{ runner.temp }}/codeapp-build.log
+          if-no-files-found: ignore
+          retention-days: 3
