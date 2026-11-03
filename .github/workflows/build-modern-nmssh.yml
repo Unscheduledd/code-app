@@ -1,0 +1,47 @@
+name: Build modern NMSSH for iOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build-modern-nmssh.yml
+      - scripts/build-modern-nmssh.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nmssh-modern-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 55
+    steps:
+      - name: Checkout Code App build scripts
+        uses: actions/checkout@v4
+
+      - name: Build NMSSH with libssh2 1.11.1 and OpenSSL 3.5.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-modern-nmssh.sh
+          bash scripts/build-modern-nmssh.sh 2>&1 | tee "$RUNNER_TEMP/modern-nmssh-build.log"
+
+      - name: Upload verified modern SSH framework
+        uses: actions/upload-artifact@v4
+        with:
+          name: NMSSH-modern-ios-arm64
+          path: modern-nmssh/NMSSH.xcframework
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NMSSH-modern-failure-log
+          path: ${{ runner.temp }}/modern-nmssh-build.log
+          if-no-files-found: ignore
+          retention-days: 3
