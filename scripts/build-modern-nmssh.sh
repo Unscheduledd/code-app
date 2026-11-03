@@ -138,11 +138,13 @@ FRAMEWORK="$OUT/NMSSHDerived/Build/Products/Release-iphoneos/NMSSH.framework"
 test -s "$FRAMEWORK/NMSSH"
 echo "== Verify framework binary version =="
 file "$FRAMEWORK/NMSSH"
-if ! strings "$FRAMEWORK/NMSSH" | grep -Fqx '1.11.1'; then
+# Materialize strings before grepping: -q would SIGPIPE macOS strings under pipefail.
+strings "$FRAMEWORK/NMSSH" > "$OUT/nmssh-binary-strings.txt"
+if ! grep -Fx '1.11.1' "$OUT/nmssh-binary-strings.txt"; then
   echo "ERROR: New libssh2 1.11.1 version marker not found in framework" >&2
   exit 1
 fi
-if ! strings "$FRAMEWORK/NMSSH" | grep -F 'OpenSSL 3.5.7' >/dev/null; then
+if ! grep -F 'OpenSSL 3.5.7' "$OUT/nmssh-binary-strings.txt"; then
   echo "ERROR: OpenSSL 3.5.7 version marker not found in framework" >&2
   exit 1
 fi
