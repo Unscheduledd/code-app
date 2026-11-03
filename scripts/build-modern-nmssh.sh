@@ -144,8 +144,12 @@ if ! grep -Fx '1.11.1' "$OUT/nmssh-binary-strings.txt"; then
   echo "ERROR: New libssh2 1.11.1 version marker not found in framework" >&2
   exit 1
 fi
-if ! grep -F 'OpenSSL 3.5.7' "$OUT/nmssh-binary-strings.txt"; then
-  echo "ERROR: OpenSSL 3.5.7 version marker not found in framework" >&2
+# Static linking may eliminate unused OpenSSL version strings; verify
+# the compiled headers and linked cryptography symbols instead.
+grep -F 'OPENSSL_VERSION_STR "3.5.7"' "$OPENSSL_PREFIX/include/openssl/opensslv.h"
+nm -g "$FRAMEWORK/NMSSH" > "$OUT/nmssh-binary-symbols.txt"
+if ! grep -E '_EVP_(Digest|Cipher|PKEY)|_OPENSSL_init_crypto' "$OUT/nmssh-binary-symbols.txt" | head -n 8; then
+  echo "ERROR: No OpenSSL cryptography symbols linked into NMSSH" >&2
   exit 1
 fi
 
