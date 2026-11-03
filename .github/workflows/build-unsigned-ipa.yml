@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: codeapp-unsigned-${{ github.ref }}
@@ -42,6 +43,35 @@ jobs:
           echo "Framework download size:"
           du -sh Resources
           df -h .
+
+      - name: Install verified NMSSH 1.11.1 (OpenSSL 3.5.7)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/modern-nmssh"
+          gh run download 41584758531 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name NMSSH-modern-ios-arm64 \
+            --dir "$RUNNER_TEMP/modern-nmssh"
+          if [ -f "$RUNNER_TEMP/modern-nmssh/NMSSH.xcframework/Info.plist" ]; then
+            new="$RUNNER_TEMP/modern-nmssh/NMSSH.xcframework"
+          elif [ -f "$RUNNER_TEMP/modern-nmssh/Info.plist" ]; then
+            new="$RUNNER_TEMP/modern-nmssh"
+          else
+            echo 'Modern NMSSH artifact lacks XCFramework Info.plist' >&2
+            exit 1
+          fi
+          binary="$(find "$new" -type f -name NMSSH -path '*/NMSSH.framework/*' -print -quit)"
+          test -n "$binary"
+          file "$binary"
+          strings "$binary" > "$RUNNER_TEMP/modern-nmssh-strings.txt"
+          grep -Fx '1.11.1' "$RUNNER_TEMP/modern-nmssh-strings.txt"
+          rm -rf source/Resources/NMSSH.xcframework
+          ditto "$new" source/Resources/NMSSH.xcframework
+          plutil -lint source/Resources/NMSSH.xcframework/Info.plist
+          echo 'Installed verified libssh2 1.11.1 NMSSH into Code App.'
 
       - name: Add empty optional remote execution configuration
         shell: bash
@@ -162,7 +192,7 @@ jobs:
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: CodeApp-GTU-Purple-Feather
+          name: CodeApp-GTU-Purple-SSH-1.11.1
           path: CodeApp-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
