@@ -148,10 +148,12 @@ fi
 # the compiled headers and linked cryptography symbols instead.
 grep -F 'OPENSSL_VERSION_STR "3.5.7"' "$OPENSSL_PREFIX/include/openssl/opensslv.h"
 nm -g "$FRAMEWORK/NMSSH" > "$OUT/nmssh-binary-symbols.txt"
-if ! grep -E '_EVP_(Digest|Cipher|PKEY)|_OPENSSL_init_crypto' "$OUT/nmssh-binary-symbols.txt" | head -n 8; then
+grep -E '_EVP_(Digest|Cipher|PKEY)|_OPENSSL_init_crypto' "$OUT/nmssh-binary-symbols.txt" > "$OUT/openssl-linked-symbols.txt" || true
+if [ ! -s "$OUT/openssl-linked-symbols.txt" ]; then
   echo "ERROR: No OpenSSL cryptography symbols linked into NMSSH" >&2
   exit 1
 fi
+sed -n '1,8p' "$OUT/openssl-linked-symbols.txt"
 
 echo "== Create modern iOS-only NMSSH.xcframework =="
 mkdir -p "$ROOT/modern-nmssh"
