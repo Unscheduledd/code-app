@@ -3,6 +3,7 @@
 // Does not modify host-key validation, cryptographic algorithms, authentication,
 // stored credentials, server configuration, or app extension behavior.
 
+#include <stdio.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
