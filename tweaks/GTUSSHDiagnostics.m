@@ -9,6 +9,10 @@
 #import <objc/runtime.h>
 #import <dispatch/dispatch.h>
 
+@protocol GTUNMSSHSessionDiagnostics <NSObject>
+@property (nonatomic, readonly) NSError *lastError;
+@end
+
 static BOOL (*originalConnect)(id, SEL) = NULL;
 static void (*originalDisconnect)(id, SEL) = NULL;
 static __thread BOOL recordingConnection = NO;
@@ -17,7 +21,7 @@ static __thread char lastMessage[512];
 
 static void captureLastError(id session) {
     if (!recordingConnection) return;
-    NSError *error = [session lastError];
+    NSError *error = [(id<GTUNMSSHSessionDiagnostics>)session lastError];
     if (![error isKindOfClass:[NSError class]] || error.code == 0) return;
     lastCode = error.code;
     NSString *description = error.localizedDescription ?: @"No native error description";
