@@ -1,0 +1,53 @@
+name: Build small Code App SSH diagnostic dylib
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/ios-ssh-dylib
+    paths:
+      - tweaks/GTUSSHDiagnostics.m
+      - .github/workflows/build-ssh-dylib.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code App tweak
+        uses: actions/checkout@v4
+
+      - name: Compile iOS arm64 dynamic library
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p build
+          xcrun --sdk iphoneos clang \
+            -arch arm64 \
+            -isysroot "$sdk" \
+            -miphoneos-version-min=15.0 \
+            -fobjc-arc \
+            -O2 -fvisibility=hidden \
+            -dynamiclib \
+            -framework Foundation -framework UIKit \
+            -Wl,-install_name,@rpath/GTUSSHDiagnostics.dylib \
+            -o build/GTUSSHDiagnostics.dylib tweaks/GTUSSHDiagnostics.m
+          file build/GTUSSHDiagnostics.dylib
+          otool -hv build/GTUSSHDiagnostics.dylib
+          otool -L build/GTUSSHDiagnostics.dylib
+          test -s build/GTUSSHDiagnostics.dylib
+          echo 'SHA256:'
+          shasum -a 256 build/GTUSSHDiagnostics.dylib
+          ls -lh build/GTUSSHDiagnostics.dylib
+
+      - name: Upload injectable dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTUSSHDiagnostics-ios-arm64
+          path: build/GTUSSHDiagnostics.dylib
+          if-no-files-found: error
+          retention-days: 30
